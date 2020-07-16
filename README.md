@@ -1,0 +1,2 @@
+# autoPinterest
+基于Python Selenium的自动化操作Pinterest程序
