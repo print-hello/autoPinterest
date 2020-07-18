@@ -1,8 +1,6 @@
 import json
 import requests
 
-from DBPools import OPMysql
-
 
 def generate_configuration(conn, port, proxy_ip, zone, customer, customer_pwd):
     delete_port(port)
