@@ -17,7 +17,6 @@ from util import write_txt_time
 # Access to the home page
 def save_home_url(driver, conn, account_id):
     home_page_XP = '//div[@data-test-id="header-profile"]/a'
-    # home_page_XP = '//div[@data-test-id="button-container"]//div[3]/div/div[2]//a'
     home_page_flag = explicit_wait(
         driver, "VOEL", [home_page_XP, "XPath"], 10, False)
     if home_page_flag:
@@ -336,7 +335,7 @@ def create_board(driver, conn, homefeed_url, account_id, create_board_num):
     sql = "SELECT home_page FROM account WHERE id=%s"
     result = conn.op_select_one(sql, account_id)
     if result:
-        home_page = result['home_page'] + 'boards'
+        boards_page = result['home_page'] + 'boards'
         sql = "SELECT board_name FROM board_template ORDER BY RAND() LIMIT %s"
         results = conn.op_select_all(sql, create_board_num)
         for board_echo in results:
@@ -344,30 +343,38 @@ def create_board(driver, conn, homefeed_url, account_id, create_board_num):
             board_name = board_echo['board_name']
             print('Boardname', board_name)
 
-            driver.get(home_page)
-            display_add_XP = '//button[@aria-label="Profile actions overflow"]'
+            driver.get(boards_page)
+            # 个人账号按钮
+            display_add_XP = "//body//div[@id='__PWS_ROOT__']//div//div//div[3]//div[2]//div[1]//div[1]//button[1]"
             display_add_flag = explicit_wait(
-                driver, "VOEL", [display_add_XP, "XPath"], 15, False)
+                driver, "VOEL", [display_add_XP, "XPath"], 30, False)
             if display_add_flag:
-                driver.find_element_by_xpath(display_add_XP).click()
 
-                create_button_XP = '//div[text()="Create board"]'
+                driver.find_element_by_xpath(display_add_XP).click()
+                create_button_XP = '//div[@data-test-id="Create board"]'
                 create_button_flag = explicit_wait(
-                    driver, "VOEL", [create_button_XP, "XPath"], 15, False)
+                    driver, "VOEL", [create_button_XP, "XPath"], 30, False)
+
                 if create_button_flag:
                     driver.find_element_by_xpath(create_button_XP).click()
                 else:
                     cr_bo_success = 0
             else:
+                # 商业账号按钮
                 try:
                     driver.find_element_by_xpath(
-                        '//div[@data-test-id="createBoardCard"]').click()
+                        "//body/div[@id='__PWS_ROOT__']/div/div/div/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]").click()
                 except:
                     cr_bo_success = 0
 
             if cr_bo_success == 1:
                 cr_bo_success = input_board_text(
                     driver, board_name, cr_bo_success)
+                try:
+                    driver.find_element_by_xpath('//button[@aria-label="Done"]').click()
+                    time.sleep(1)
+                except:
+                    pass
 
             if cr_bo_success == 1:
                 sql = "UPDATE account SET created_boards=created_boards+1 WHERE id=%s"
@@ -391,7 +398,7 @@ def input_board_text(driver, board_name, cr_bo_success):
         time.sleep(1)
 
         create_button = driver.find_element_by_xpath(
-            '//form//button[@type="submit"]')
+            '//body/div/div/div/div/div/div/div/div/div/div/div[2]/div[1]/div[1]/button[1]')
         (ActionChains(driver)
          .move_to_element(create_button)
          .click()
