@@ -285,7 +285,7 @@ class Pinterest():
         options.add_argument('blink-settings=imagesEnabled=false') # 不加载图片, 提升速度
         options.add_argument('--no-sandbox') # 以最高权限运行
         options.add_argument('--disable-popup-blocking') # 禁止弹窗
-        options.add_argument('user-data-dir=%s' % user_data_path)
+        # options.add_argument('user-data-dir=%s' % user_data_path)
         options.add_argument('user-agent=%s' % self.agent)
         options.add_argument(
             "--proxy-server=http://%s:%d" % ('127.0.0.1', self.port))
