@@ -107,7 +107,7 @@ def handle_pop_up(driver):
         pass
 
 
-def upload_pic(driver, conn, step_flag, current_time, account_id, upload_web, upload_pic_min, upload_pic_max):
+def upload_pic(driver, conn, process_flag, current_time, account_id, upload_web, upload_pic_min, upload_pic_max):
     all_upload_num = random.randint(upload_pic_min, upload_pic_max)
     print('Start uploading %s images...' % all_upload_num)
     while True:
@@ -191,7 +191,7 @@ def random_browsing(driver,
                     conn,
                     homefeed_url,
                     account_id,
-                    step_flag,
+                    process_flag,
                     save_pic_control,
                     browsing_pic_min,
                     browsing_pic_max,
@@ -212,6 +212,7 @@ def random_browsing(driver,
             web_pin_num = 1
             for web_pin_one in web_pin_arr:
                 if web_pin_num == click_num:
+                    time.sleep(3)
                     web_pin_one.click()
                     print('Start the', i + 1, 'browsing')
                     time.sleep(5)
@@ -221,7 +222,7 @@ def random_browsing(driver,
                     except Exception as e:
                         if save_pic_control == 1 and (i + 1) % 2 == 0:
                             save_pic(driver, conn, homefeed_url,
-                                     account_id, step_flag)
+                                     account_id, process_flag, send_keys=0)
 
                     win32api.keybd_event(27, 0, 0, 0)
                     win32api.keybd_event(
@@ -238,7 +239,7 @@ def random_browsing(driver,
 
                 write_txt_time()
         else:
-            step_flag = 0
+            process_flag = 0
 
 
 def close_AD_page(driver):
@@ -254,24 +255,22 @@ def close_AD_page(driver):
 
 
 # save a picture
-def save_pic(driver, conn, homefeed_url, account_id, step_flag, board_name='like', belong=2, pin_pic_url=False):
+def save_pic(driver, conn, homefeed_url, account_id, process_flag, board_name='like', belong=2, pin_pic_url=False, send_keys=1):
 
     add_time = (datetime.datetime.utcnow() +
                 datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     if not pin_pic_url:
-        pin_pic_XP = '//a[@class="imageLink"]//img'
+        pin_pic_XP = "//body/div[@id='__PWS_ROOT__']/div/div/div/div/div/div/div/div/div/div/div/div/div/div/div/div/div/div/div/a/div/div/div/img[1]"
         pin_pic_flag = explicit_wait(
             driver, "VOEL", [pin_pic_XP, "XPath"], 3, False)
         if pin_pic_flag:
             pin_pic_url = driver.find_element_by_xpath(
                 pin_pic_XP).get_attribute('src')
 
-    saved_XP = '//div[@data-test-id="saved-info"]/div/a/span'
-    saved_flag = explicit_wait(driver, "VOEL", [saved_XP, "XPath"], 3, False)
+    saved_XP = "//span[contains(text(),'Saved to')]"
+    saved_flag = explicit_wait(driver, "VOEL", [saved_XP, "XPath"], 5, False)
     if saved_flag:
-        saved_text = driver.find_element_by_xpath(saved_XP).text
-        if saved_text == 'Saved to ':
-            print('The picture has been saved.')
+        print('The picture has been saved.')
     else:
         if belong == 2:
             sql = 'SELECT * FROM other_pin_history WHERE pin_pic_url=%s AND id=%s'
@@ -281,7 +280,7 @@ def save_pic(driver, conn, homefeed_url, account_id, step_flag, board_name='like
         if result:
             print('The picture has been saved.')
         else:
-            board_select_XP = '//div[@data-test-id="boardSelectionDropdown"]'
+            board_select_XP = '//button[@data-test-id="PinBetterSaveDropdown"]'
             board_select_flag = explicit_wait(
                 driver, "VOEL", [board_select_XP, "XPath"], 10, False)
             if board_select_flag:
@@ -308,16 +307,15 @@ def save_pic(driver, conn, homefeed_url, account_id, step_flag, board_name='like
                          .perform())
                         time.sleep(2)
                     except Exception as e:
-                        # print(e)
                         create_XP = '//div[@data-test-id="create-board"]/div'
                         create_flag = explicit_wait(
                             driver, "VOEL", [create_XP, "XPath"], 10, False)
                         if create_flag:
                             driver.find_element_by_xpath(create_XP).click()
 
-                            step_flag = input_board_text(driver, board_name, 1)
+                            process_flag = input_board_text(driver, board_name, 1, send_keys)
 
-                    if step_flag == 1:
+                    if process_flag == 1:
                         if belong == 2:
                             sql = 'INSERT INTO other_pin_history (account_id, pin_pic_url, add_time) VALUES (%s, %s, %s)'
                         elif belong == 1:
@@ -385,20 +383,20 @@ def create_board(driver, conn, homefeed_url, account_id, create_board_num):
         driver.get(homefeed_url)
 
 
-def input_board_text(driver, board_name, cr_bo_success):
+def input_board_text(driver, board_name, cr_bo_success, send_keys=1):
     input_board_XP = '//input[@id="boardEditName"]'
     input_board_flag = explicit_wait(
         driver, "VOEL", [input_board_XP, "XPath"], 15, False)
     if input_board_flag:
-        driver.find_element_by_xpath(
-            input_board_XP).clear()
-        time.sleep(1)
-        driver.find_element_by_xpath(
-            input_board_XP).send_keys(board_name)
-        time.sleep(1)
+        time.sleep(3)
+        
+        if send_keys == 1:
+            driver.find_element_by_xpath(
+                input_board_XP).send_keys(board_name)
+            time.sleep(1)
 
         create_button = driver.find_element_by_xpath(
-            '//body/div/div/div/div/div/div/div/div/div/div/div[2]/div[1]/div[1]/button[1]')
+            "//button/div[contains(text(),'Create')]")
         (ActionChains(driver)
          .move_to_element(create_button)
          .click()
@@ -419,7 +417,7 @@ def input_board_text(driver, board_name, cr_bo_success):
 def click_our_pin(driver,
                   conn,
                   homefeed_url,
-                  step_flag,
+                  process_flag,
                   current_time,
                   scroll_num,
                   pin_self_count,
@@ -509,7 +507,7 @@ def click_our_pin(driver,
                                         pin_pic_url = web_pin_one.find_element_by_xpath(
                                             './/div[@data-test-id="pinrep-image"]//img').get_attribute('src')
                                         save_pic(
-                                            driver, conn, homefeed_url, account_id, step_flag, board_name, 1, pin_pic_url)
+                                            driver, conn, homefeed_url, account_id, process_flag, board_name, 1, pin_pic_url)
                                         sql = "SELECT count(-1) AS allnum FROM pin_history WHERE account_id=%s AND add_time>=%s"
                                         pin_count = conn.op_select_one(
                                             sql, (account_id, current_time))['allnum']
@@ -538,62 +536,86 @@ def click_our_pin(driver,
         print('Saved enough!')
 
 
-def follow(driver, conn, homefeed_url, step_flag, account_id, follow_num):
-    print('Turn on the follow function, count:', follow_num)
-    sql = 'SELECT COUNT(1) AS all_count FROM follow_history WHERE follow_id=%s'
-    follow_count = conn.op_select_one(sql, account_id)['all_count']
-    if follow_count < follow_num:
-        sql = 'SELECT * FROM account WHERE home_page IS NOT NULL ORDER BY RAND() LIMIT %s'
-        results = conn.op_select_all(sql, follow_num)
-        if results:
-            for res in results:
-                user_id = res['id']
-                home_url = res['home_page']
-                sql = 'SELECT * FROM follow_history WHERE user_id=%s AND follow_id=%s'
-                judge_exist = conn.op_select_one(sql, (user_id, account_id))
-                if judge_exist:
-                    print('Already followed!')
+def follow(driver, conn, homefeed_url, account_id, follow_num, current_time):
+    sql = 'SELECT * FROM main_promotion_account WHERE account_id=%s'
+    is_exist = conn.op_select_one(sql, account_id)
+    if not is_exist:
+        sql = 'SELECT COUNT(1) AS all_count FROM follow_history WHERE follow_id=%s AND followed_time=%s'
+        follow_count = conn.op_select_one(sql, (account_id, current_time))['all_count']
+        if follow_count < follow_num:
+            sql = 'SELECT user_id, follow_id FROM follow_history WHERE follow_id=%s AND user_id IN (SELECT account_id FROM main_promotion_account)'
+            results1 = conn.op_select_all(sql, account_id)
+            user_in_history_lst = []
+            if results1:
+
+                for r1 in results1:
+                    user_id = r1['user_id']
+                    user_in_history_lst.append(user_id)
+
+            sql = 'SELECT account_id FROM main_promotion_account'
+            results2 = conn.op_select_all(sql)
+            if results2:
+                main_promotion_account_lst = []
+
+                for r2 in results2:
+                    main_promotion_account_id = r2['account_id']
+                    main_promotion_account_lst.append(main_promotion_account_id)
+            # 删除已经follow的推广账户id，获得剩余未follow的推广账户id
+            if user_in_history_lst:
+                for del_id in user_in_history_lst:
+                    main_promotion_account_lst.remove(del_id)
+            if main_promotion_account_lst:
+                if len(main_promotion_account_lst) >= follow_num: 
+                    follow_lst = random.sample(main_promotion_account_lst, follow_num)
                 else:
-                    home_url_lst = ['https://www.pinterest.com/dresskas2020/', 'https://www.pinterest.com/promdressjack/', 'https://www.pinterest.com/whitepottry/',
-                    'https://www.pinterest.com/promlongshort/', 'https://www.pinterest.com/oldnewpromshop/']
-                    home_url_num = random.randint(0, 4)
-                    home_url = home_url_lst[home_url_num]
-                    try:
-                        driver.get(home_url)
-                    except:
-                        pass
-                    time.sleep(5)
-                    follow_XP = '//*[@id="__PWS_ROOT__"]/div[1]/div[3]/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div[3]/div/div[2]/button/div'
-                    follow_flag = explicit_wait(
-                        driver, "VOEL", [follow_XP, "XPath"], 5, False)
-                    if follow_flag:
-                        follow_state = driver.find_element_by_xpath(
-                            follow_XP).text
-                        if follow_state == 'Follow':
+                    follow_lst = main_promotion_account_lst
+                print('Turn on the follow function, count:', len(follow_lst))
 
-                            try:
-                                driver.find_element_by_xpath(
-                                    '//*[@id="__PWS_ROOT__"]/div[1]/div[3]/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div[3]/div/div[2]/button').click()
-                                time.sleep(1)
-                            except:
-                                pass
-                    else:
-
+                for follow_id in follow_lst:
+                    sql = 'SELECT account_home_url FROM main_promotion_account WHERE account_id=%s'
+                    res_follow_url = conn.op_select_one(sql, follow_id)
+                    if res_follow_url:
+                        follow_url = res_follow_url['account_home_url']                  
                         try:
-                            follow_state = driver.find_element_by_xpath(
-                                '//*[@id="__PWS_ROOT__"]/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div[2]/div/div/div/div/button/div').text
-                            if follow_state == 'Follow':
-                                driver.find_element_by_xpath(
-                                    '//*[@id="__PWS_ROOT__"]/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div[2]/div/div/div/div/button').click()
-                                time.sleep(1)
+                            driver.get(follow_url)
                         except:
                             pass
-                    sql = 'INSERT INTO follow_history (user_id, follow_id) VALUES (%s, %s)'
-                    conn.op_commit(sql, (user_id, account_id))
+                        follow_XP = "//div[@id='__PWS_ROOT__']//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//button"
+                        follow_flag = explicit_wait(
+                            driver, "VOEL", [follow_XP, "XPath"], 15, False)
+                        if follow_flag:
+                            follow_state = follow_flag.find_element_by_xpath(
+                                './div').text
+                            if follow_state == 'Follow':
 
-                write_txt_time()
+                                try:
+                                    driver.find_element_by_xpath(
+                                        follow_XP).click()
+                                    time.sleep(1)
+                                except:
+                                    pass
+                        else:
 
-            driver.get(homefeed_url)
+                            try:
+                                follow_state = driver.find_element_by_xpath(
+                                    "//div[@id='__PWS_ROOT__']//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//button/div").text
+                                if follow_state == 'Follow':
+                                    driver.find_element_by_xpath(
+                                        "//div[@id='__PWS_ROOT__']//div//div//div//div//div//div//div//div//div//div//div//div//div//div//div//button").click()
+                                    time.sleep(1)
+                            except:
+                                pass
+                        sql = 'INSERT INTO follow_history (user_id, follow_id, followed_time) VALUES (%s, %s, %s)'
+                        conn.op_commit(sql, (follow_id, account_id, current_time))
+
+                        write_txt_time()
+
+                driver.get(homefeed_url)
+
+            else:
+                print('There are no more accounts that need to be followed')
+        else:
+            print('Today we have followed!')
 
     else:
-        print('Do not need follow!')
+        print('Is promotion account, Ban follow!')
