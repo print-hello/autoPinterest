@@ -137,6 +137,14 @@ class Pinterest():
                         if login_state == 2:
                             sql = 'UPDATE account set proxy_err_times=proxy_err_times+1 where id=%s'
                             self.conn.op_commit(sql, self.account_id)
+                            sql = 'SELECT proxy_err_times FROM account WHERE id=%s'
+                            r_error = self.op_select_one(sql, self.account_id)
+                            if r_error:
+                                proxy_err_times = r_error['proxy_err_times']
+                                if proxy_err_times >= 4:
+                                    sql = 'UPDATE port_info SET state=2 WHERE port=%s'
+                                    conn.op_commit(sql, self.port)
+
                         sql = 'UPDATE account SET state=%s, login_times=login_times+1, action_computer="-" WHERE id=%s'     
                         self.conn.op_commit(sql, (login_state, self.account_id))
                         process_flag = False
@@ -159,7 +167,7 @@ class Pinterest():
                         create_board(self.driver, self.conn, self.home_url, self.account_id, self.create_board_num)
 
                     if self.follow_num > 0:
-                        follow(self.driver, self.conn, self.home_url, process_flag, self.account_id, self.follow_num)
+                        follow(self.driver, self.conn, self.home_url, self.account_id, self.follow_num, self.current_time)
 
                     if self.random_browsing_control == 1:
                         random_browsing(
@@ -314,6 +322,7 @@ class Pinterest():
                 sql = 'SELECT state, COUNT(1) AS status_count FROM account GROUP BY state'
                 all_status = self.conn.op_select_all(sql)
                 if all_status:
+                    status_0 = status_1 = status_2 = status_9 = status_66 = status_99 = 0
                     for status in all_status:
                         if int(status['state']) == 0:
                             status_0 = status['status_count']
