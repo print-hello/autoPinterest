@@ -6,6 +6,7 @@ import datetime
 import random
 import win32api
 import win32con
+from urllib.parse import quote
 from selenium.webdriver.common.action_chains import ActionChains
 
 from login_util import get_coo
@@ -124,8 +125,6 @@ def upload_pic(driver, conn, process_flag, current_time, account_id, upload_web,
 
             if result:
                 upload_pic_path = result['savelink']
-                upload_pic_path = upload_pic_path.replace(
-                    'http://guanli.lianstone.net', 'http://guanli2.lianstone.net')
                 upload_pic_board = result['saveboard']
                 upload_pic_id = result['id']
                 driver.get(upload_pic_path)
@@ -164,7 +163,7 @@ def upload_pic(driver, conn, process_flag, current_time, account_id, upload_web,
                         upload_flag = 0
                         break
                     else:
-                        saved_succ_XP = '//h5[starts-with(text(), "Saved to")]'
+                        saved_succ_XP = """//*[contains(text(),'aved to')]"""
                         saved_succ_flag = explicit_wait(
                             driver, "VOEL", [saved_succ_XP, "XPath"], 8, False)
                         if saved_succ_flag:
@@ -232,7 +231,7 @@ def random_browsing(driver,
                     win32api.keybd_event(35, 0, 0, 0)
                     win32api.keybd_event(
                         35, 0, win32con.KEYEVENTF_KEYUP, 0)
-                    time.sleep(3)
+                    time.sleep(5)
                     break
                 else:
                     web_pin_num += 1
@@ -389,7 +388,7 @@ def input_board_text(driver, board_name, cr_bo_success, send_keys=1):
         driver, "VOEL", [input_board_XP, "XPath"], 15, False)
     if input_board_flag:
         time.sleep(3)
-        
+
         if send_keys == 1:
             driver.find_element_by_xpath(
                 input_board_XP).send_keys(board_name)
@@ -427,7 +426,7 @@ def click_our_pin(driver,
     sql = "SELECT count(-1) AS allnum FROM pin_history WHERE account_id=%s AND add_time>=%s"
     pin_count = conn.op_select_one(sql, (account_id, current_time))['allnum']
     if pin_count < int(pin_self_count):
-        sql = "SELECT web_url FROM follow_url"
+        sql = "SELECT web_url FROM website_url"
         results = conn.op_select_all(sql)
         http_in_sql_list = []
         for res in results:
@@ -441,45 +440,21 @@ def click_our_pin(driver,
             for key_wrod in key_wrods:
                 search_key_words = key_wrod['word']
                 board_name = key_wrod['boards']
+                board_name_encode = quote(board_name, 'utf-8')
+                search_url = """https://www.pinterest.com/search/pins/?q={}&rs=typed""".format(board_name_encode)
+                board_name_split = board_name.split(' ')
+                for _ in board_name_split:
+                    search_url += "&term_meta[]={}%7Ctyped".format(_.strip())
+                # 个人号搜索键
+                # input_search_XP = '//input[@name="searchBoxInput"]'
+                # input_search_flag = explicit_wait(
+                #     driver, "VOEL", [input_search_XP, "XPath"], 10, False)
+                # if not input_search_flag:
+                    # 商业号搜索键
+                #     input_search_XP = "//div[@id='searchBoxContainer']//button"
 
-                input_search_XP = '//input[@name="q"]'
-                input_search_flag = explicit_wait(
-                    driver, "VOEL", [input_search_XP, "XPath"], 5, False)
-                if not input_search_flag:
-                    input_search_XP = '//input[@name="searchBoxInput"]'
-
-                # try:
-                #     driver.find_element_by_xpath('//button[@aria-label="Remove search input"]').click()
-                # except:
-                #     pass
-
-                time.sleep(1)
-                driver.find_element_by_xpath(input_search_XP).click()
-                time.sleep(1)
-
-                # ctrl + a
-                win32api.keybd_event(17, 0, 0, 0)
-                win32api.keybd_event(65, 0, 0, 0)
-                win32api.keybd_event(
-                    65, 0, win32con.KEYEVENTF_KEYUP, 0)
-                win32api.keybd_event(
-                    17, 0, win32con.KEYEVENTF_KEYUP, 0)
-                time.sleep(1)
-
-                # Backspace
-                win32api.keybd_event(8, 0, 0, 0)
-                win32api.keybd_event(
-                    8, 0, win32con.KEYEVENTF_KEYUP, 0)
-                time.sleep(1)
-
-                driver.find_element_by_xpath(
-                    input_search_XP).send_keys(search_key_words)
-                time.sleep(3)
-
-                win32api.keybd_event(13, 0, 0, 0)
-                win32api.keybd_event(
-                    13, 0, win32con.KEYEVENTF_KEYUP, 0)
-
+                # driver.find_element_by_xpath(input_search_XP).click()
+                # time.sleep(1)
                 for _ in range(scroll_num):
                     web_pin_arr_XP = '//div[@data-grid-item="true"]'
                     web_pin_arr_flag = explicit_wait(
@@ -496,7 +471,7 @@ def click_our_pin(driver,
                             except:
                                 pass
                             try:
-                                web_pin_XP = '//a[@rel="nofollow"]//div[2]/div'
+                                web_pin_XP = '//a[@class="GestaltTouchableFocus"]/div/div[2]/div[1]'
                                 web_pin_flag = explicit_wait(
                                     driver, "VOEL", [web_pin_XP, "XPath"], 3, False)
                                 if web_pin_flag:
