@@ -163,7 +163,7 @@ def upload_pic(driver, conn, process_flag, current_time, account_id, upload_web,
                         upload_flag = 0
                         break
                     else:
-                        saved_succ_XP = """//*[contains(text(),'aved to')]"""
+                        saved_succ_XP = """//*[contains(text(),'Saved to')]"""
                         saved_succ_flag = explicit_wait(
                             driver, "VOEL", [saved_succ_XP, "XPath"], 8, False)
                         if saved_succ_flag:
