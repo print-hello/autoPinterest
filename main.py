@@ -43,8 +43,8 @@ MYSQLINFO = {
 class Pinterest():
     def __init__(self):
         super(Pinterest, self).__init__()
-        self.conn = OPMysql(MYSQLINFO)
         logging.config.fileConfig('logging.conf')
+        self.conn = None
         self.logs = logging.getLogger()
         email = logging.handlers.SMTPHandler(("smtp.163.com", 25), 'sendlogging@163.com',
                                              ['printhello@163.com'],
@@ -103,20 +103,18 @@ class Pinterest():
                 time.sleep(9999)
             write_txt_time()
             print('Host Name:', self.hostname)
+            self.conn = OPMysql(MYSQLINFO)
             self.get_account_count()
             self.get_account()
             if self.account_id > 0:
                 self.get_config()
                 self.success_num += 1
-                process_flag = wait_port_opening(process_flag)
-                if process_flag:
-                    gen_port_status_code = generate_configuration(self.conn, self.port, self.proxy_ip, self.zone, self.customer, self.customer_pwd)
-                    if gen_port_status_code != 200:
-                        process_flag = False
-                else:
-                    print('Wait more than 60 seconds for the port to be ready, attempt to restart machine!')
-                    os.system('shutdown -r')
-                    time.sleep(9999)
+                # 代理共用，不再使用此判断
+                # process_flag = wait_port_opening(process_flag)
+                gen_port_status_code = generate_configuration(self.conn, self.host_ip, self.port, self.proxy_ip, self.zone, self.customer, self.customer_pwd)
+                if gen_port_status_code != 200:
+                    process_flag = False
+
                 write_txt_time()
                 if process_flag:
                     self.re_driver()
@@ -143,7 +141,7 @@ class Pinterest():
                                 proxy_err_times = r_error['proxy_err_times']
                                 if proxy_err_times >= 4:
                                     sql = 'UPDATE port_info SET state=2 WHERE port=%s'
-                                    conn.op_commit(sql, self.port)
+                                    self.conn.op_commit(sql, self.port)
 
                         sql = 'UPDATE account SET state=%s, login_times=login_times+1, action_computer="-" WHERE id=%s'     
                         self.conn.op_commit(sql, (login_state, self.account_id))
@@ -202,27 +200,27 @@ class Pinterest():
             result = self.conn.op_select_one(sql)
             self.get_account_info(result)
         else:
-            sql = 'SELECT * from virtual_machine_info where v_name=%s'
-            machine_info = self.conn.op_select_one(sql, self.hostname[:2])
+            sql = 'SELECT * from virtual_machine_info where v_name="proxy"'
+            machine_info = self.conn.op_select_one(sql)
             if machine_info:
                 self.host_ip = machine_info['host_ip']
-                sql = "SELECT * FROM account WHERE action_computer=%s AND action_time<%s AND state=1 AND login_times<4 ORDER BY action_time ASC LIMIT 1"
-                result = self.conn.op_select_one(sql, (self.hostname, self.current_time))
+            sql = "SELECT * FROM account WHERE action_computer=%s AND action_time<%s AND state=1 AND login_times<4 ORDER BY action_time ASC LIMIT 1"
+            result = self.conn.op_select_one(sql, (self.hostname, self.current_time))
+
+            if result:
+                self.get_account_info(result)
+            else:
+                sql = "SELECT * FROM account WHERE action_computer='-' AND action_time<%s AND state=1 AND login_times<4 ORDER BY action_time ASC limit 1"
+                result = self.conn.op_select_one(sql, self.current_time)
 
                 if result:
                     self.get_account_info(result)
+
+                    sql = "UPDATE account SET action_computer=%s WHERE id=%s"
+                    self.conn.op_commit(sql, (self.hostname, self.account_id))
+                    write_txt_time()
                 else:
-                    sql = "SELECT * FROM account WHERE action_computer='-' AND action_time<%s AND state=1 AND login_times<4 ORDER BY action_time ASC limit 1"
-                    result = self.conn.op_select_one(sql, self.current_time)
-
-                    if result:
-                        self.get_account_info(result)
-
-                        sql = "UPDATE account SET action_computer=%s WHERE id=%s"
-                        self.conn.op_commit(sql, (self.hostname, self.account_id))
-                        write_txt_time()
-                    else:
-                        print('Not Data!')
+                    print('Not Data!')
 
     def get_account_info(self, result):
         self.account_id = result["id"]
@@ -239,7 +237,7 @@ class Pinterest():
         port_res = self.conn.op_select_one(sql, self.port)
         if port_res:
             self.proxy_ip = port_res['ip']
-            sql = 'SELECT * FROM proxy_account_info WHERE id=2'
+            sql = 'SELECT * FROM proxy_account_info WHERE id=1'
             lpm_info = self.conn.op_select_one(sql)
             if lpm_info:
                 self.zone = lpm_info['zone']
@@ -295,7 +293,7 @@ class Pinterest():
         # options.add_argument('user-data-dir=%s' % user_data_path) # 使用浏览器配置文件  
         options.add_argument('user-agent=%s' % self.agent)
         options.add_argument(
-            "--proxy-server=http://%s:%d" % ('127.0.0.1', self.port))
+            "--proxy-server=http://%s:%d" % (self.host_ip, self.port))
 
         self.driver = webdriver.Chrome(executable_path=webdriver_path, options=options)
         # print(driver.execute_script("return navigator.userAgent;")) # UA设置是否成功
