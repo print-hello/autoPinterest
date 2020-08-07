@@ -2,8 +2,8 @@ import json
 import requests
 
 
-def generate_configuration(conn, port, proxy_ip, zone, customer, customer_pwd):
-    delete_port(port)
+def generate_configuration(conn, host_ip, port, proxy_ip, zone, customer, customer_pwd):
+    delete_port(port, host_ip)
     lpm_conf = {}
     lpm_conf["proxy"] = {}
     lpm_conf["proxy"]["proxy_type"] = "persist"
@@ -31,16 +31,16 @@ def generate_configuration(conn, port, proxy_ip, zone, customer, customer_pwd):
     lpm_conf["proxy"]["password"] = customer_pwd
     lpm_conf["proxy"]["zone"] = zone
     # 成功状态码：200
-    r_post_conf = requests.post("http://127.0.0.1:22999/api/proxies", json=lpm_conf)
+    r_post_conf = requests.post("http://%s:22999/api/proxies" % host_ip, json=lpm_conf)
     # print(r_post_conf.status_code)
 
     return r_post_conf.status_code
 
 
-def delete_port(port):
+def delete_port(port, host_ip):
     # 成功状态码：204
     try:
-        r_del_port = requests.delete('http://127.0.0.1:22999/api/proxies/%s' % str(port))
+        r_del_port = requests.delete('http://%s:22999/api/proxies/%s' % (host_ip, str(port)))
         # print(r_del_port.status_code)
     except:
         pass
