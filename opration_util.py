@@ -426,7 +426,7 @@ def click_our_pin(driver,
     sql = "SELECT count(-1) AS allnum FROM pin_history WHERE account_id=%s AND add_time>=%s"
     pin_count = conn.op_select_one(sql, (account_id, current_time))['allnum']
     if pin_count < int(pin_self_count):
-        sql = "SELECT web_url FROM website_url"
+        sql = "SELECT web_url FROM website_url WHERE status=1"
         results = conn.op_select_all(sql)
         http_in_sql_list = []
         for res in results:
@@ -527,7 +527,7 @@ def follow(driver, conn, homefeed_url, account_id, follow_num, current_time):
                     user_id = r1['user_id']
                     user_in_history_lst.append(user_id)
 
-            sql = 'SELECT account_id FROM main_promotion_account'
+            sql = 'SELECT account_id FROM main_promotion_account WHERE status=1'
             results2 = conn.op_select_all(sql)
             if results2:
                 main_promotion_account_lst = []
