@@ -70,6 +70,7 @@ class Pinterest():
         self.customer = None
         self.customer_pwd = None
         self.upload_web = None
+        self.upload_done = 0
         self.cookies = None
         self.agent = None
         self.success_num = 0
@@ -109,11 +110,15 @@ class Pinterest():
             if self.account_id > 0:
                 self.get_config()
                 self.success_num += 1
-                # 代理共用，不再使用此判断
-                # process_flag = wait_port_opening(process_flag)
-                gen_port_status_code = generate_configuration(self.conn, self.host_ip, self.port, self.proxy_ip, self.zone, self.customer, self.customer_pwd)
-                if gen_port_status_code != 200:
-                    process_flag = False
+                process_flag = wait_port_opening(process_flag)
+                if process_flag:
+                    gen_port_status_code = generate_configuration(self.conn, self.host_ip, self.port, self.proxy_ip, self.zone, self.customer, self.customer_pwd)
+                    if gen_port_status_code != 200:
+                        process_flag = False
+                else:
+                    print('Wait more than 60 seconds for the port to be ready, attempt to restart machine!')
+                    os.system('shutdown -r')
+                    time.sleep(9999)
 
                 write_txt_time()
                 if process_flag:
@@ -136,7 +141,7 @@ class Pinterest():
                             sql = 'UPDATE account set proxy_err_times=proxy_err_times+1 where id=%s'
                             self.conn.op_commit(sql, self.account_id)
                             sql = 'SELECT proxy_err_times FROM account WHERE id=%s'
-                            r_error = self.op_select_one(sql, self.account_id)
+                            r_error = self.conn.op_select_one(sql, self.account_id)
                             if r_error:
                                 proxy_err_times = r_error['proxy_err_times']
                                 if proxy_err_times >= 4:
@@ -174,7 +179,7 @@ class Pinterest():
                     if self.click_our_pin_control == 1:
                         click_our_pin(self.driver, self.conn, self.home_url, process_flag, self.current_time, self.scroll_num, self.pin_self_count, self.search_words_count, self.account_id)
 
-                    if self.upload_web != '-' and self.upload_pic_control == 1:
+                    if self.upload_done==1 and self.upload_web != '-' and self.upload_pic_control == 1:
                         upload_pic(self.driver, self.conn, process_flag, self.current_time, self.account_id, self.upload_web, self.upload_pic_min, self.upload_pic_max)
 
                     print('End of account processing...')
@@ -183,7 +188,7 @@ class Pinterest():
                     sql = 'UPDATE account SET login_times=0, action_computer="-" WHERE id=%s'
                     self.conn.op_commit(sql, self.account_id)
                     self.conn.dispose()
-                    delete_port(self.port)
+                    delete_port(self.port, self.host_ip)
                     write_txt_time()
                     time.sleep(10)
             else:
@@ -228,6 +233,7 @@ class Pinterest():
         self.pwd = result["pw"]
         self.port = result['port']
         self.upload_web = result['upload_web']
+        self.upload_done = result['upload_done']
         self.cookies = result['cookies']
         self.created_boards = result['created_boards']
         self.config_id = result['setting_num']
