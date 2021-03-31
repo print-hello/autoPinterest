@@ -7,4 +7,4 @@ PyMySQL==1.0.2
 pywin32==300
 requests==2.25.1
 selenium==3.141.0
-urllib3==1.26.2
+urllib3==1.26.4
