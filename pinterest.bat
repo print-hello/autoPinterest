@@ -10,13 +10,15 @@ set /a ss=%now_tme:~6,2%
 set /a ns=(%hh%*60+%mm%)*60+%ss%
 echo %hh%-%mm%-%ss%
 echo current time  %ns%
-echo %ns%>D:\autoPinterest\boot\config_time.txt
+echo %ns%>C:\Users\Administrator\Desktop\autoPinterest\boot\config_time.txt
 
 rem if exist Z:\host\autoPinterest\boot\hosts.txt @copy Z:\host\autoPinterest\boot\hosts.txt C:\Windows\System32\drivers\etc\hosts /y
 
-xcopy Z:\host\autoPinterest D:\autoPinterest /y
+xcopy D:\autoPinterest C:\Users\Administrator\Desktop\autoPinterest /s/e/i/y
 
-xcopy Z:\host\autoPinterest\boot D:\autoPinterest\boot /y
+xcopy D:\autoPinterest\boot C:\Users\Administrator\Desktop\autoPinterest\boot /s/e/i/y
+
+xcopy D:\autoPinterest\firefox_extension C:\Users\Administrator\Desktop\autoPinterest\firefox_extension /s/e/i/y
 
 ping /n 5 127.1>nul
 start "" "D:\autoPinterest\main.py"
@@ -40,7 +42,7 @@ echo current time  %ns%
 echo now times min  %now_tme%
 setlocal enabledelayedexpansion
 set adslzhanghao=0
-for /f "delims=" %%a in (D:\autoPinterest\boot\config_time.txt) do (set  adslzhanghao=%%a)
+for /f "delims=" %%a in (C:\Users\Administrator\Desktop\autoPinterest\boot\config_time.txt) do (set  adslzhanghao=%%a)
 
 
 set /a ns1=%adslzhanghao%
@@ -57,6 +59,7 @@ if %tim_flag% LSS -180 (
 	taskkill /f /im chromedriver.exe
 	taskkill /f /im chrome.exe
 	taskkill /f /im geckodriver.exe
+	taskkill /f /im firefox.exe
 	ping /n 3 127.1>nul
 	
 	start "" "D:\autoPinterest\main.py"
@@ -70,6 +73,7 @@ if %tim_flag% GTR 180 (
 	taskkill /f /im chromedriver.exe
 	taskkill /f /im chrome.exe
 	taskkill /f /im geckodriver.exe
+	taskkill /f /im firefox.exe
 	ping /n 3 127.1>nul
 	start "" "D:\autoPinterest\main.py"
 	ping /n 5 127.1>nul

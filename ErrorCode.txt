@@ -1,0 +1,10 @@
+Error Code:
+4: The password you entered is incorrect.
+
+5: Safe mode alert!
+
+6: There is no account with this email
+
+7: Hmm, wrong email or password. Try again!
+
+8: Your account has been suspended. We've sent you an email with more info, including how to get in touch.

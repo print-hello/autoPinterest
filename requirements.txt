@@ -1,0 +1,10 @@
+certifi==2020.12.5
+chardet==4.0.0
+configparser==5.0.1
+DBUtils==2.0
+idna==2.10
+PyMySQL==1.0.2
+pywin32==300
+requests==2.25.1
+selenium==3.141.0
+urllib3==1.26.2

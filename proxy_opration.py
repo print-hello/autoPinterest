@@ -1,11 +1,17 @@
+import configparser
 from DBPools import OPMysql
 
 
+profile = 'config.ini'
+profile_info = configparser.ConfigParser()
+profile_info.read(profile, encoding='utf-8')
+pro_info_items = dict(profile_info.items('pinterest'))
+
 MYSQLINFO = {
-    "host": 'localhost',
-    "user": 'pinterest',
-    "passwd": '******',
-    "db": 'pinterest',
+    "host": pro_info_items['host'],
+    "user": pro_info_items['user'],
+    "password": pro_info_items['password'],
+    "db": pro_info_items['db'],
     "port": 3306,
     "charset": 'utf8mb4'
 }
@@ -33,13 +39,13 @@ def update_ip_table():
                     pass
             else:
                 break
-    print('End')
+    print('IP库更新完成！')
 
     # 读取port_info表对ip库使用过的ip进行标记
     sql = 'SELECT ip FROM port_info'
     results = conn.op_select_all(sql)
     if results:
-        print('标记中...')
+        print('标记正在使用的IP...')
         for port in results:
             port_ip = port['ip']
             sql = 'SELECT ip FROM ips WHERE ip=%s'
@@ -61,7 +67,7 @@ def change_error_port():
         for i in results:
             port = i['port']
             port_ip = i['ip']
-            change_ip(port, port_ip)   
+            change_ip(port, port_ip)
 
 
 def change_ip(port, port_ip):

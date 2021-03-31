@@ -1,5 +1,5 @@
 import pymysql
-from DBUtils.PooledDB import PooledDB
+from dbutils.pooled_db import PooledDB
 
 
 class OPMysql:
@@ -18,7 +18,7 @@ class OPMysql:
                             maxcached=3,
                             host=mysqlInfo['host'],
                             user=mysqlInfo['user'],
-                            passwd=mysqlInfo['passwd'],
+                            password=mysqlInfo['password'],
                             db=mysqlInfo['db'],
                             port=mysqlInfo['port'],
                             charset=mysqlInfo['charset'])

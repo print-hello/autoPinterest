@@ -1,25 +1,28 @@
 '''
 Author: Vinter Wang
-Email: printhello@163.com
+Email: vinterhello@gmail.com
 '''
 import os
 import time
 import socket
 import sqlite3
 import datetime
-import logging.config
+import subprocess
+import configparser
+import logging
+import logging.handlers
+from logging.handlers import RotatingFileHandler
 from selenium import webdriver
 
 from DBPools import OPMysql
 
-from login_util import login
-from login_util import get_coo
+from login_util import login_user
 
+from util import get_user_link
 from util import write_txt_time
 from util import wait_port_opening
 
 from opration_util import random_browsing
-from opration_util import save_home_url
 from opration_util import click_our_pin
 from opration_util import handle_pop_up
 from opration_util import create_board
@@ -29,12 +32,20 @@ from opration_util import follow
 from gen_lpm_conf import generate_configuration
 from gen_lpm_conf import delete_port
 
+from browser import set_selenium_local_session
+from browser import close_browser
+
+
+profile = 'config.ini'
+profile_info = configparser.ConfigParser()
+profile_info.read(profile, encoding='utf-8')
+pro_info_items = dict(profile_info.items('pinterest'))
 
 MYSQLINFO = {
-    "host": 'localhost',
-    "user": 'pinterest',
-    "passwd": '******',
-    "db": 'pinterest',
+    "host": pro_info_items['host'],
+    "user": pro_info_items['user'],
+    "password": pro_info_items['password'],
+    "db": pro_info_items['db'],
     "port": 3306,
     "charset": 'utf8mb4'
 }
@@ -43,26 +54,19 @@ MYSQLINFO = {
 class Pinterest():
     def __init__(self):
         super(Pinterest, self).__init__()
-        logging.config.fileConfig('logging.conf')
         self.conn = None
-        self.logs = logging.getLogger()
-        email = logging.handlers.SMTPHandler(("smtp.163.com", 25), 'sendlogging@163.com',
-                                             ['printhello@163.com'],
-                                             "Logging from pinterest",
-                                             credentials=(
-                                                 'sendlogging@163.com', 'sendlogtome1121'),
-                                             )
-        self.logs.addHandler(email)
+        self.logger = None
         self.hostname = socket.gethostname()
         self.current_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime("%Y-%m-%d")
         self.login_url = 'https://www.pinterest.com/login/?referrer=home_page/'
         self.home_url = 'https://www.pinterest.com/homefeed/'
         self.main_url = 'https://www.pinterest.com/'
-        self.driver = None
+        self.browser = None
         self.proxy_type = 0
         self.account_id = 0
         self.email = None
-        self.pwd = None
+        self.username = None
+        self.password = None
         self.port = 0
         self.host_ip = None
         self.proxy_ip = None
@@ -86,7 +90,7 @@ class Pinterest():
         self.random_browsing_control = 0
         self.browsing_pic_min = 0
         self.browsing_pic_max = 0
-        self.save_home_url_control = 0
+        self.get_user_name = 0
         self.create_board_num = 0
         self.save_pic_control = 0
         self.follow_num = 0
@@ -98,110 +102,172 @@ class Pinterest():
     def action(self):
         while True:
             process_flag = True
-            if self.success_num > 4:
+            if self.success_num > 10:
                 os.system('shutdown -r')
-                print('Clear cache')
+                self.logger.info('Clear cache')
                 time.sleep(9999)
             write_txt_time()
-            print('Host Name:', self.hostname)
             self.conn = OPMysql(MYSQLINFO)
             self.get_account_count()
             self.get_account()
+            self.logger = self.get_pinbot_logger(False, True)
+            self.logger.info("Start account processing...")
+            self.logger.info('Host Name: {}'.format(self.hostname))
+            self.logger.info('ID: {}'.format(self.account_id))
+            self.logger.info('Port: {}'.format(self.port))
             if self.account_id > 0:
                 self.get_config()
                 self.success_num += 1
-                process_flag = wait_port_opening(process_flag)
+                process_flag = wait_port_opening(self.logger, process_flag)
                 if process_flag:
                     gen_port_status_code = generate_configuration(self.conn, self.host_ip, self.port, self.proxy_ip, self.zone, self.customer, self.customer_pwd)
                     if gen_port_status_code != 200:
                         process_flag = False
                 else:
-                    print('Wait more than 60 seconds for the port to be ready, attempt to restart machine!')
+                    self.logger.info('Wait more than 60 seconds for the port to be ready, attempt to restart machine!')
                     os.system('shutdown -r')
                     time.sleep(9999)
 
                 write_txt_time()
                 if process_flag:
-                    self.re_driver()
-                    login_state = login(
-                        self.driver, self.login_url, self.main_url, self.account_id, self.email, self.pwd, self.cookies)
+                    self.browser = set_selenium_local_session(
+                        self.host_ip,
+                        self.port,
+                        False,
+                        None,
+                        25,
+                        self.logger
+                    )
+
+                    login_state = login_user(
+                        self.browser, self.logger, self.conn, self.proxy_ip, self.login_url, self.main_url, self.account_id, self.email, self.username, self.password, self.cookies)
+                    write_txt_time()
                     time.sleep(1)
                     if login_state == 1 or login_state == 11:
                         sql = "UPDATE account SET state=1, action_time=%s, proxy_err_times=0 WHERE id=%s"
                         self.conn.op_commit(sql, (self.current_time, self.account_id))
                         if login_state == 11:
-                            cookies = get_coo(self.driver)
+                            cookies = get_coo(self.browser)
                             sql = 'UPDATE account SET cookies=%s WHERE id=%s'
                             self.conn.op_commit(sql, (cookies, self.account_id))
-                        self.driver.get(self.home_url)
+                        self.browser.get(self.home_url)
+                        write_txt_time()
                         time.sleep(5)
-                        handle_pop_up(self.driver)
+                        # handle_pop_up(self.browser)
                     else:
                         if login_state == 2:
-                            sql = 'UPDATE account set proxy_err_times=proxy_err_times+1 where id=%s'
-                            self.conn.op_commit(sql, self.account_id)
-                            sql = 'SELECT proxy_err_times FROM account WHERE id=%s'
-                            r_error = self.conn.op_select_one(sql, self.account_id)
-                            if r_error:
-                                proxy_err_times = r_error['proxy_err_times']
-                                if proxy_err_times >= 4:
-                                    sql = 'UPDATE port_info SET state=2 WHERE port=%s'
-                                    self.conn.op_commit(sql, self.port)
+                            # sql = 'UPDATE account set proxy_err_times=proxy_err_times+1 where id=%s'
+                            # self.conn.op_commit(sql, self.account_id)
+                            # sql = 'SELECT proxy_err_times FROM account WHERE id=%s'
+                            # r_error = self.conn.op_select_one(sql, self.account_id)
+                            # if r_error:
+                            #     proxy_err_times = r_error['proxy_err_times']
+                    #     if int(proxy_err_times) >= 4:
+                            sql = 'UPDATE port_info SET state=2 WHERE port=%s'
+                            self.conn.op_commit(sql, self.port)
 
-                        sql = 'UPDATE account SET state=%s, login_times=login_times+1, action_computer="-" WHERE id=%s'     
-                        self.conn.op_commit(sql, (login_state, self.account_id))
-                        process_flag = False
-                        print('Account log-in failure, will exit the browser!')
-                        try:
-                            self.driver.quit()
-                        except:
-                            pass
+                            sql = 'UPDATE account SET state=2, action_computer="-" WHERE id=%s'
+                            self.conn.op_commit(sql, self.account_id)
+
+                        else:
+
+                            sql = 'UPDATE account SET state=%s, login_times=login_times+1, action_computer="-" WHERE id=%s'
+                            # sql = 'UPDATE account SET state=%s, login_times=login_times+1 WHERE id=%s'
+                            self.conn.op_commit(sql, (login_state, self.account_id))
+                            process_flag = False
+                            self.logger.info('Login false! will exit the browser!')
+
+                        close_browser(self.browser, self.logger)
                         time.sleep(5)
+
+                        self.conn.dispose()
+                        delete_port(self.port, self.host_ip)
+                        write_txt_time()
+
                         continue
 
                 if process_flag:
                     
-                    if self.save_home_url_control == 1:
-                        print('Save home page!')
-                        save_home_url(self.driver, self.conn, self.account_id)
+                    if self.get_user_name == 1 and self.username == '-':
+                        self.logger.info('Get username!')
+                        self.username = get_user_link(self.browser, self.logger, self.conn, self.account_id)
+                        # save_home_url(self.browser, self.logger, self.conn, self.account_id)
 
-                    if self.create_board_num > 0 and self.created_boards < self.create_board_num:
-                        print('Start create board')
-                        create_board(self.driver, self.conn, self.home_url, self.account_id, self.create_board_num)
+                    # if self.create_board_num > 0 and self.created_boards < self.create_board_num:
+                    #     self.logger.info('Start create board')
+                    #     create_board(self.browser, self.logger, self.conn, self.home_url, self.account_id, self.create_board_num)
 
-                    if self.follow_num > 0:
-                        follow(self.driver, self.conn, self.home_url, self.account_id, self.follow_num, self.current_time)
+                    # if self.follow_num > 0:
+                    #     follow(self.browser, self.logger, self.conn, self.home_url, self.account_id, self.follow_num, self.current_time)
 
-                    if self.random_browsing_control == 1:
-                        random_browsing(
-                            self.driver, self.conn, self.home_url, self.account_id, process_flag, self.save_pic_control, self.browsing_pic_min, self.browsing_pic_max)
+                    # if self.random_browsing_control == 1:
+                    #     random_browsing(
+                    #         self.browser, self.logger, self.conn, self.home_url, self.account_id, process_flag, self.save_pic_control, self.browsing_pic_min, self.browsing_pic_max)
                     
-                    if self.click_our_pin_control == 1:
-                        click_our_pin(self.driver, self.conn, self.home_url, process_flag, self.current_time, self.scroll_num, self.pin_self_count, self.search_words_count, self.account_id)
+                    # if self.click_our_pin_control == 1:
+                    #     click_our_pin(self.browser, self.logger, self.conn, self.home_url, process_flag, self.current_time, self.scroll_num, self.pin_self_count, self.search_words_count, self.account_id)
 
-                    if self.upload_done==1 and self.upload_web != '-' and self.upload_pic_control == 1:
-                        upload_pic(self.driver, self.conn, process_flag, self.current_time, self.account_id, self.upload_web, self.upload_pic_min, self.upload_pic_max)
+                    if self.upload_done == 1 and self.upload_web != '-' and self.upload_pic_control == 1:
+                        upload_pic(self.browser, self.logger, self.conn, process_flag, self.current_time, self.account_id, self.username, self.upload_web, self.upload_pic_min, self.upload_pic_max)
 
-                    print('End of account processing...')
+                    self.logger.info('End of account processing...')
                     time.sleep(3)
-                    self.driver.quit()
-                    sql = 'UPDATE account SET login_times=0, action_computer="-" WHERE id=%s'
+                    close_browser(self.browser, self.logger)
+                    sql = 'UPDATE account SET login_times=0, job_done=1, action_computer="-" WHERE id=%s'
                     self.conn.op_commit(sql, self.account_id)
                     self.conn.dispose()
                     delete_port(self.port, self.host_ip)
                     write_txt_time()
                     time.sleep(10)
             else:
-                print('Not data! The system will reboot in 30 minutes...')
+                self.logger.info('Not data! The system will reboot in 30 minutes...')
                 write_txt_time()
-                os.system('shutdown -r -t 1800')
-                time.sleep(1800)
+                os.system('shutdown -s -t 5')
+
                 break
+
+    def get_pinbot_logger(self, save_logs: bool, show_logs: bool, log_handler=None):
+        logger = logging.getLogger(self.email)
+        logger.setLevel(logging.DEBUG)
+        # log name and format
+        general_log = "general.log"
+
+        extra = {"username": self.email}
+        logger_formatter = logging.Formatter(
+            "%(levelname)s [%(asctime)s] [%(username)s]  %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+        if save_logs is True:
+            file_handler = logging.FileHandler(general_log)
+            # log rotation, 5 logs with 10MB size each one
+            file_handler = RotatingFileHandler(
+                general_log, maxBytes=10 * 1024 * 1024, backupCount=5
+            )
+            file_handler.setLevel(logging.DEBUG)
+
+            file_handler.setFormatter(logger_formatter)
+            logger.addHandler(file_handler)
+
+        # add custom user handler if given
+        if log_handler:
+            logger.addHandler(log_handler)
+
+        if show_logs is True:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.DEBUG)
+            console_handler.setFormatter(logger_formatter)
+            logger.addHandler(console_handler)
+
+        logger = logging.LoggerAdapter(logger, extra)
+
+        return logger
 
     # Access to the account
     def get_account(self):
         if self.hostname == 'v-PC':
-            sql = 'SELECT * FROM account WHERE id=5420'
+            self.host_ip = '127.0.0.1'
+            sql = 'SELECT * FROM account WHERE id=5441'
             result = self.conn.op_select_one(sql)
             self.get_account_info(result)
         else:
@@ -209,14 +275,14 @@ class Pinterest():
             machine_info = self.conn.op_select_one(sql)
             if machine_info:
                 self.host_ip = machine_info['host_ip']
-            sql = "SELECT * FROM account WHERE action_computer=%s AND action_time<%s AND state=1 AND login_times<4 ORDER BY action_time ASC LIMIT 1"
-            result = self.conn.op_select_one(sql, (self.hostname, self.current_time))
+            sql = "SELECT * FROM account WHERE action_computer=%s AND job_done=0 AND state=1 AND setting_num=6 AND login_times<3 ORDER BY action_time ASC LIMIT 1"
+            result = self.conn.op_select_one(sql, self.hostname)
 
             if result:
                 self.get_account_info(result)
             else:
-                sql = "SELECT * FROM account WHERE action_computer='-' AND action_time<%s AND state=1 AND login_times<4 ORDER BY action_time ASC limit 1"
-                result = self.conn.op_select_one(sql, self.current_time)
+                sql = "SELECT * FROM account WHERE action_computer='-' AND job_done=0 AND state=1 AND setting_num=6 AND login_times<3 ORDER BY action_time ASC limit 1"
+                result = self.conn.op_select_one(sql)
 
                 if result:
                     self.get_account_info(result)
@@ -224,14 +290,13 @@ class Pinterest():
                     sql = "UPDATE account SET action_computer=%s WHERE id=%s"
                     self.conn.op_commit(sql, (self.hostname, self.account_id))
                     write_txt_time()
-                else:
-                    print('Not Data!')
 
     def get_account_info(self, result):
         self.account_id = result["id"]
         self.email = result["email"]
-        self.pwd = result["pw"]
+        self.password = result["pw"]
         self.port = result['port']
+        self.username = result['username']
         self.upload_web = result['upload_web']
         self.upload_done = result['upload_done']
         self.cookies = result['cookies']
@@ -259,13 +324,10 @@ class Pinterest():
                 sql = 'UPDATE account SET agent=%s WHERE id=%s'
                 self.conn.op_commit(sql, (self.agent, self.account_id))
 
-        print("Start account processing..." + '\n' + "ID:",
-              self.account_id, "Email:", self.email)
-
     # 浏览器初始化配置
     def re_driver(self):
         execute_path = os.path.abspath('.')
-        webdriver_path = os.path.join(execute_path, 'boot', 'chromedriver.exe')
+        webdriver_path = os.path.join(execute_path, 'boot', 'geckodriver.exe')
         user_data_path = os.path.join(os.environ['USERPROFILE'], 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
         cookies_file_path = os.path.join(os.environ['USERPROFILE'], 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'default', 'Cookies')
         # 尝试关闭已经打开的浏览器进程
@@ -298,20 +360,21 @@ class Pinterest():
         options.add_argument('--disable-popup-blocking') # 禁止弹窗
         # options.add_argument('user-data-dir=%s' % user_data_path) # 使用浏览器配置文件  
         options.add_argument('user-agent=%s' % self.agent)
-        options.add_argument(
-            "--proxy-server=http://%s:%d" % (self.host_ip, self.port))
+        if self.hostname != 'DESKTOP-KHDQKRQ':
+            options.add_argument(
+                "--proxy-server=http://%s:%d" % (self.host_ip, self.port))
 
-        self.driver = webdriver.Chrome(executable_path=webdriver_path, options=options)
-        # print(driver.execute_script("return navigator.userAgent;")) # UA设置是否成功
+        self.browser = webdriver.Chrome(executable_path=webdriver_path, options=options)
+        # self.logger.info(driver.execute_script("return navigator.userAgent;")) # UA设置是否成功
         # 躲避网站检测webdriver, 此方法暂时弃用, 因为这会导致不一致
-        # self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        # self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         #   "source": """
         #     Object.defineProperty(navigator, 'webdriver', {
         #       get: () => undefined
         #     })
         #   """
         # })
-        self.driver.maximize_window()
+        self.browser.maximize_window()
 
     def get_account_count(self):
         sql = 'SELECT * FROM account_count WHERE id=1'
@@ -344,6 +407,8 @@ class Pinterest():
                         status_0, status_1, status_2,  status_9, status_66, status_99, self.current_time))
                 recovery_mode = 'UPDATE account SET state=1 WHERE state=0'
                 self.conn.op_commit(recovery_mode)
+                recovery_job = 'UPDATE account SET job_done=0 WHERE state=1'
+                self.conn.op_commit(recovery_job)
                 recovery_proxy_state = 'UPDATE account set state=1 WHERE state=2 and proxy_err_times<4'
                 self.conn.op_commit(recovery_proxy_state)
                 sql = '''UPDATE account_count SET last_update_time=%s, all_count=
@@ -355,20 +420,20 @@ class Pinterest():
                 self.conn.op_commit(sql)
 
         if all_count - real_time_num > max_error_num:
-            print('Too many account errors today to suspend operations!')
-            self.logs.error('The maximum error limit of %d accounts has been exceeded!' % max_error_num, exc_info=True)
+            self.logger.info('Too many account errors today to suspend operations!')
+            self.logger.info('The maximum error limit of {} accounts has been exceeded!'.format(max_error_num))
             os.system('shutdown -r -t 1800')
             time.sleep(9999)
 
     def get_config(self):
-        print('Run configuration:', self.config_id)
+        self.logger.info('Run configuration: {}'.format(self.config_id))
         sql = 'SELECT * FROM configuration WHERE id=%s'
         result = self.conn.op_select_one(sql, self.config_id)
         if result:
             self.random_browsing_control = result['random_browsing_control']
             self.browsing_pic_min = result['bro_pic_min']
             self.browsing_pic_max = result['bro_pic_max']
-            self.save_home_url_control = result['save_home_page']
+            self.get_user_name = result['get_user_name']
             self.save_pic_control = result['save_pic_control']
             self.follow_num = result['follow_num']
             self.pin_self_count = result['pin_self_count']

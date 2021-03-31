@@ -6,7 +6,7 @@ def generate_configuration(conn, host_ip, port, proxy_ip, zone, customer, custom
     delete_port(port, host_ip)
     lpm_conf = {}
     lpm_conf["proxy"] = {}
-    lpm_conf["proxy"]["proxy_type"] = "persist"
+    # lpm_conf["proxy"]["proxy_type"] = "persist"
     lpm_conf["proxy"]["multiply"] = 0
     lpm_conf["proxy"]["multiply_users"] = False
     lpm_conf["proxy"]["ssl"] = False
